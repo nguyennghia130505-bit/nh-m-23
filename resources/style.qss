@@ -1,0 +1,80 @@
+/*
+resources/style.qss - Global Stylesheet
+Hệ thống Quản lý Điện Khu Dân Cư
+*/
+
+/* ─── Base ─────────────────────────────────────────────── */
+QWidget {
+    font-family: "Segoe UI", "Arial", sans-serif;
+    font-size: 16px;
+    color: #0F172A;
+}
+
+QMainWindow, QDialog {
+    background: #F1F5F9;
+}
+
+/* ─── ScrollBar ─────────────────────────────────────────── */
+QScrollBar:vertical {
+    background: #F1F5F9;
+    width: 8px;
+    border-radius: 4px;
+}
+QScrollBar::handle:vertical {
+    background: #CBD5E1;
+    border-radius: 4px;
+    min-height: 30px;
+}
+QScrollBar::handle:vertical:hover { background: #94A3B8; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+
+QScrollBar:horizontal {
+    background: #F1F5F9;
+    height: 8px;
+    border-radius: 4px;
+}
+QScrollBar::handle:horizontal {
+    background: #CBD5E1;
+    border-radius: 4px;
+    min-width: 30px;
+}
+QScrollBar::handle:horizontal:hover { background: #94A3B8; }
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
+
+/* ─── QMessageBox ───────────────────────────────────────── */
+QMessageBox {
+    background: #FFFFFF;
+}
+QMessageBox QPushButton {
+    background: #3B82F6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 16px;
+    min-width: 70px;
+    font-weight: 600;
+}
+QMessageBox QPushButton:hover { background: #2563EB; }
+QMessageBox QPushButton[text="No"], QMessageBox QPushButton[text="Cancel"] {
+    background: #F1F5F9;
+    color: #374151;
+    border: 1px solid #E2E8F0;
+}
+
+/* ─── QToolTip ──────────────────────────────────────────── */
+QToolTip {
+    background: #1E293B;
+    color: #F8FAFC;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 11px;
+}
+
+/* ─── QStatusBar ────────────────────────────────────────── */
+QStatusBar {
+    background: #1E3A5F;
+    color: #94A3B8;
+    font-size: 11px;
+    padding: 4px 12px;
+}
