@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import QDialog, QMessageBox
 from PyQt5.QtCore import pyqtSignal
 from PyQt5 import uic
 
-from data.mock_data import USERS
+from data.db_repository import verify_login
 
 
 class LoginWindow(QDialog):
@@ -110,13 +110,14 @@ class LoginWindow(QDialog):
             self.txtPassword.setFocus()
             return
 
-        # Kiểm tra thông tin đăng nhập
-        if username in USERS and USERS[username]["password"] == password:
+        # Kiểm tra thông tin đăng nhập từ CSDL
+        user_info = verify_login(username, password)
+        if user_info:
             self.lblError.setText("")
             print(f"[LOGIN] Đăng nhập thành công: {username}")
             self.login_success.emit(username)
             self.accept()  # Đóng dialog, trả về Accepted
         else:
-            self.lblError.setText("✗ Tên đăng nhập hoặc mật khẩu không đúng!")
+            self.lblError.setText("✗ Sai tên đăng nhập, mật khẩu hoặc lỗi CSDL!")
             self.txtPassword.clear()
             self.txtPassword.setFocus()

@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 
-from data.mock_data import CUSTOMERS, ELECTRICITY_READINGS
+from data.db_repository import get_all_readings, get_all_meters, get_latest_reading, add_reading
 
 
 class ElectricityInputView(QWidget):
@@ -27,7 +27,6 @@ class ElectricityInputView(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.readings = copy.deepcopy(ELECTRICITY_READINGS)
         self._build_ui()
         self._load_table()
 
@@ -77,12 +76,14 @@ class ElectricityInputView(QWidget):
         self.txt_thang = QLineEdit("04/2026")
         self.txt_thang.setStyleSheet(input_style)
 
-        lbl_kh = QLabel("Khách hàng:")
+        lbl_kh = QLabel("Công tơ:")
         lbl_kh.setStyleSheet(label_style)
         self.cmb_kh = QComboBox()
         self.cmb_kh.setStyleSheet(input_style)
-        for c in CUSTOMERS:
-            self.cmb_kh.addItem(f"{c['ma_kh']} - {c['ten']}", userData=c["ma_kh"])
+        meters = get_all_meters()
+        for m in meters:
+            if m["trang_thai"] == "Hoạt động":
+                self.cmb_kh.addItem(f"{m['ma_cong_to']} - {m['ten_kh']} ({m['vi_tri']})", userData=m)
 
         grid.addWidget(lbl_thang, 0, 0)
         grid.addWidget(self.txt_thang, 0, 1)
@@ -171,7 +172,7 @@ class ElectricityInputView(QWidget):
         main_layout.addWidget(hist_label)
 
         self.table = QTableWidget()
-        columns = ["Mã KH", "Tên KH", "Tháng", "Chỉ số cũ", "Chỉ số mới", "Tiêu thụ (kWh)"]
+        columns = ["Mã KH", "Mã CT", "Tên KH", "Tháng", "Chỉ số cũ", "Chỉ số mới", "Tiêu thụ"]
         self.table.setColumnCount(len(columns))
         self.table.setHorizontalHeaderLabels(columns)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -204,6 +205,28 @@ class ElectricityInputView(QWidget):
         self.btn_calc.clicked.connect(self._on_calc)
         self.btn_save.clicked.connect(self._on_save)
         self.btn_clear.clicked.connect(self._on_clear)
+        self.cmb_kh.currentIndexChanged.connect(self._on_customer_changed)
+
+        # Kích hoạt sự kiện cho khách hàng đầu tiên
+        self._on_customer_changed()
+
+    def _on_customer_changed(self):
+        """Tự động điền chỉ số cũ dựa trên lịch sử nhập liệu gần nhất của công tơ"""
+        meter = self.cmb_kh.currentData()
+        if not meter:
+            self.txt_chi_so_cu.clear()
+            return
+            
+        ma_cong_to = meter["ma_cong_to"]
+        
+        # Tìm bản ghi gần nhất từ DB
+        last_reading = get_latest_reading(ma_cong_to)
+        
+        if last_reading:
+            # Chỉ số mới của tháng trước sẽ là chỉ số cũ của tháng này
+            self.txt_chi_so_cu.setText(str(last_reading["chi_so_moi"]))
+        else:
+            self.txt_chi_so_cu.clear()
 
     def _auto_calc(self):
         """Tự động tính tiêu thụ khi thay đổi chỉ số"""
@@ -244,22 +267,30 @@ class ElectricityInputView(QWidget):
             QMessageBox.warning(self, "Lỗi", "Chỉ số mới không được nhỏ hơn chỉ số cũ!")
             return
 
-        ma_kh = self.cmb_kh.currentData()
-        ten_kh = self.cmb_kh.currentText().split(" - ", 1)[-1]
+        meter = self.cmb_kh.currentData()
+        if not meter:
+            QMessageBox.warning(self, "Lỗi", "Vui lòng chọn công tơ!")
+            return
+
+        ma_kh = meter["ma_kh"]
+        ma_cong_to = meter["ma_cong_to"]
         thang = self.txt_thang.text().strip() or "04/2026"
 
         record = {
             "ma_kh": ma_kh,
-            "ten_kh": ten_kh,
+            "ma_cong_to": ma_cong_to,
             "thang": thang,
             "chi_so_cu": cu,
             "chi_so_moi": moi,
             "tieu_thu": moi - cu,
         }
-        self.readings.append(record)
-        self._load_table()
-        QMessageBox.information(self, "Thành công", "Đã lưu chỉ số điện!")
-        print(f"[INPUT] Lưu chỉ số: {record}")
+        success = add_reading(record)
+        if success:
+            self._load_table()
+            QMessageBox.information(self, "Thành công", "Đã lưu chỉ số điện!")
+            print(f"[INPUT] Lưu chỉ số: {record}")
+        else:
+            QMessageBox.critical(self, "Lỗi", "Không thể lưu vào CSDL!")
 
     def _on_clear(self):
         """Xóa form nhập"""
@@ -273,16 +304,17 @@ class ElectricityInputView(QWidget):
     def _load_table(self):
         """Nạp lịch sử chỉ số vào bảng"""
         self.table.setRowCount(0)
-        for row_idx, r in enumerate(self.readings):
+        data = get_all_readings()
+        for row_idx, r in enumerate(data):
             self.table.insertRow(row_idx)
             values = [
-                r["ma_kh"], r["ten_kh"], r["thang"],
+                r["ma_kh"], r.get("ma_cong_to", ""), r["ten_kh"], r["thang"],
                 str(r["chi_so_cu"]), str(r["chi_so_moi"]),
                 f"{r['tieu_thu']} kWh"
             ]
             for col_idx, text in enumerate(values):
                 item = QTableWidgetItem(text)
                 item.setTextAlignment(Qt.AlignVCenter | Qt.AlignCenter)
-                if col_idx == 5:
+                if col_idx == 6:
                     item.setForeground(QColor("#1D4ED8"))
                 self.table.setItem(row_idx, col_idx, item)

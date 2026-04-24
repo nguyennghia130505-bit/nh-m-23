@@ -86,7 +86,7 @@
           <item>
            <widget class="QLabel" name="lblAppIcon">
             <property name="text">
-             <string>⚡</string>
+             <string>&#9889;</string>
             </property>
             <property name="alignment">
              <set>Qt::AlignCenter</set>
@@ -96,7 +96,7 @@
           <item>
            <widget class="QLabel" name="lblAppName">
             <property name="text">
-             <string>Điện Khu Dân Cư</string>
+             <string>&#272;&#7879;n Khu D&#226;n C&#432;</string>
             </property>
             <property name="alignment">
              <set>Qt::AlignCenter</set>
@@ -109,7 +109,7 @@
           <item>
            <widget class="QLabel" name="lblUser">
             <property name="text">
-             <string>👤 Admin</string>
+             <string>&#128100; Admin</string>
             </property>
             <property name="alignment">
              <set>Qt::AlignCenter</set>
@@ -123,7 +123,7 @@
         </widget>
        </item>
        <item>
-        <!-- Menu danh sách -->
+        <!-- Menu danh sach -->
         <widget class="QListWidget" name="menuList">
          <property name="objectName">
           <string>menuList</string>
@@ -136,37 +136,42 @@
          </property>
          <item>
           <property name="text">
-           <string>  📊  Dashboard</string>
+           <string>  &#128202;  Dashboard</string>
           </property>
          </item>
          <item>
           <property name="text">
-           <string>  👥  Quản lý Khách hàng</string>
+           <string>  &#128101;  Qu&#7843;n l&#253; Kh&#225;ch h&#224;ng</string>
           </property>
          </item>
          <item>
           <property name="text">
-           <string>  ⚡  Công tơ Điện</string>
+           <string>  &#9889;  C&#244;ng t&#417; &#272;i&#7879;n</string>
           </property>
          </item>
          <item>
           <property name="text">
-           <string>  📝  Nhập Chỉ số</string>
+           <string>  &#128221;  Nh&#7853;p Ch&#7881; s&#7889;</string>
           </property>
          </item>
          <item>
           <property name="text">
-           <string>  💰  Tính Tiền Điện</string>
+           <string>  &#128176;  T&#237;nh Ti&#7873;n &#272;i&#7879;n</string>
           </property>
          </item>
          <item>
           <property name="text">
-           <string>  🧾  Hóa đơn</string>
+           <string>  &#129534;  H&#243;a &#273;&#417;n</string>
           </property>
          </item>
          <item>
           <property name="text">
-           <string>  📈  Báo cáo</string>
+           <string>  &#128200;  B&#225;o c&#225;o</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>  &#9989;  &#272;&#227; Thanh To&#225;n</string>
           </property>
          </item>
         </widget>
@@ -179,10 +184,10 @@
         </spacer>
        </item>
        <item>
-        <!-- Nút đăng xuất -->
+        <!-- Nut dang xuat -->
         <widget class="QPushButton" name="btnLogout">
          <property name="text">
-          <string>🚪  Đăng xuất</string>
+          <string>&#128474;  &#272;&#259;ng xu&#7845;t</string>
          </property>
          <property name="minimumHeight">
           <number>45</number>
@@ -196,7 +201,7 @@
      </widget>
     </item>
     <item>
-     <!-- Khu vực nội dung chính -->
+     <!-- Khu vuc noi dung chinh -->
      <widget class="QStackedWidget" name="stackedWidget">
       <property name="objectName">
        <string>stackedWidget</string>

@@ -14,13 +14,13 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 
-from data.mock_data import CUSTOMERS
+from data.db_repository import get_all_customers, add_customer, update_customer, delete_customer
 
 
 class CustomerFormDialog(QDialog):
     """Dialog thêm/sửa thông tin khách hàng"""
 
-    def __init__(self, data: dict = None, parent=None):
+    def __init__(self, data: dict = None, parent=None, customers=None):
         super().__init__(parent)
         self.setWindowTitle("Thêm khách hàng" if data is None else "Sửa khách hàng")
         self.setFixedSize(420, 350)
@@ -87,6 +87,20 @@ class CustomerFormDialog(QDialog):
             idx = self.cmb_trang_thai.findText(data.get("trang_thai", ""))
             if idx >= 0:
                 self.cmb_trang_thai.setCurrentIndex(idx)
+        elif customers is not None:
+            # Tự động tạo mã KH
+            max_id = 0
+            for c in customers:
+                if c["ma_kh"].startswith("KH"):
+                    try:
+                        num = int(c["ma_kh"][2:])
+                        max_id = max(max_id, num)
+                    except ValueError:
+                        pass
+            new_id = f"KH{max_id + 1:03d}"
+            self.txt_ma.setText(new_id)
+            self.txt_ma.setReadOnly(True)
+            self.txt_ma.setStyleSheet(input_style + " background: #E2E8F0; color: #64748B;")
 
         # Buttons OK/Cancel
         btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -132,9 +146,13 @@ class CustomerView(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        # Tạo bản sao dữ liệu mock để không ảnh hưởng nguồn gốc
-        self.customers = copy.deepcopy(CUSTOMERS)
+        self.customers = []
         self._build_ui()
+        self._refresh_data()
+
+    def _refresh_data(self):
+        """Lấy dữ liệu từ DB và cập nhật bảng"""
+        self.customers = get_all_customers()
         self._load_table()
 
     def _build_ui(self):
@@ -314,17 +332,21 @@ class CustomerView(QWidget):
 
     def _on_add(self):
         """Mở dialog thêm khách hàng"""
-        dialog = CustomerFormDialog(parent=self)
+        dialog = CustomerFormDialog(parent=self, customers=self.customers)
         if dialog.exec_() == QDialog.Accepted:
             new_data = dialog.get_data()
             # Kiểm tra trùng mã KH
             if any(c["ma_kh"] == new_data["ma_kh"] for c in self.customers):
                 QMessageBox.warning(self, "Lỗi", f"Mã KH '{new_data['ma_kh']}' đã tồn tại!")
                 return
-            self.customers.append(new_data)
-            self._load_table()
-            QMessageBox.information(self, "Thành công", "Thêm khách hàng thành công!")
-            print(f"[CUSTOMER] Thêm: {new_data}")
+            # Thêm vào DB
+            success = add_customer(new_data)
+            if success:
+                self._refresh_data()
+                QMessageBox.information(self, "Thành công", "Thêm khách hàng thành công!")
+                print(f"[CUSTOMER] Thêm: {new_data}")
+            else:
+                QMessageBox.critical(self, "Lỗi", "Không thể thêm vào CSDL!")
 
     def _on_edit(self):
         """Mở dialog sửa khách hàng"""
@@ -335,14 +357,14 @@ class CustomerView(QWidget):
         dialog = CustomerFormDialog(data=cust, parent=self)
         if dialog.exec_() == QDialog.Accepted:
             updated = dialog.get_data()
-            # Cập nhật lại danh sách
-            for i, c in enumerate(self.customers):
-                if c["ma_kh"] == updated["ma_kh"]:
-                    self.customers[i] = updated
-                    break
-            self._load_table()
-            QMessageBox.information(self, "Thành công", "Cập nhật thành công!")
-            print(f"[CUSTOMER] Sửa: {updated}")
+            # Cập nhật DB
+            success = update_customer(updated["ma_kh"], updated)
+            if success:
+                self._refresh_data()
+                QMessageBox.information(self, "Thành công", "Cập nhật thành công!")
+                print(f"[CUSTOMER] Sửa: {updated}")
+            else:
+                QMessageBox.critical(self, "Lỗi", "Không thể cập nhật vào CSDL!")
 
     def _on_delete(self):
         """Xóa khách hàng đang chọn"""
@@ -356,11 +378,14 @@ class CustomerView(QWidget):
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No
         )
         if reply == QMessageBox.Yes:
-            self.customers = [c for c in self.customers if c["ma_kh"] != cust["ma_kh"]]
-            self._load_table()
-            print(f"[CUSTOMER] Xóa: {cust['ma_kh']}")
+            success = delete_customer(cust["ma_kh"])
+            if success:
+                self._refresh_data()
+                print(f"[CUSTOMER] Xóa: {cust['ma_kh']}")
+            else:
+                QMessageBox.critical(self, "Lỗi", "Không thể xóa khỏi CSDL! (Có thể khách hàng đang có công tơ/hóa đơn)")
 
     def _on_refresh(self):
         """Làm mới bảng, xóa tìm kiếm"""
         self.txt_search.clear()
-        self._load_table()
+        self._refresh_data()

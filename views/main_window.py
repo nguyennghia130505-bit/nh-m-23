@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import QMainWindow, QMessageBox
 from PyQt5.QtCore import Qt
 from PyQt5 import uic
 
-from data.mock_data import USERS
+from data.db_repository import get_user
 from views.dashboard_view import DashboardView
 from views.customer_view import CustomerView
 from views.meter_view import MeterView
@@ -16,6 +16,7 @@ from views.electricity_input_view import ElectricityInputView
 from views.billing_view import BillingView
 from views.invoice_view import InvoiceView
 from views.report_view import ReportView
+from views.paid_customers_view import PaidCustomersView
 
 
 # Ánh xạ chỉ số menu → index trong QStackedWidget
@@ -27,6 +28,7 @@ MENU_INDEX = {
     4: "Tính tiền",
     5: "Hóa đơn",
     6: "Báo cáo",
+    7: "Đã Thanh Toán",
 }
 
 
@@ -52,7 +54,8 @@ class MainWindow(QMainWindow):
         self.menuList.setCurrentRow(0)
 
         # Cập nhật tên user trên sidebar
-        ho_ten = USERS.get(username, {}).get("ho_ten", username)
+        user_info = get_user(username)
+        ho_ten = user_info["ho_ten"] if user_info else username
         self.lblUser.setText(f"👤 {ho_ten}")
 
         self.statusbar.showMessage(f"Đã đăng nhập: {ho_ten}  |  Hệ thống Quản lý Điện Khu Dân Cư")
@@ -145,15 +148,17 @@ class MainWindow(QMainWindow):
         self.billing_page = BillingView()
         self.invoice_page = InvoiceView()
         self.report_page = ReportView()
+        self.paid_customers_page = PaidCustomersView()
 
         # Thêm các trang theo thứ tự tương ứng với menu
-        self.stackedWidget.addWidget(self.dashboard_page)       # index 0
-        self.stackedWidget.addWidget(self.customer_page)        # index 1
-        self.stackedWidget.addWidget(self.meter_page)           # index 2
+        self.stackedWidget.addWidget(self.dashboard_page)          # index 0
+        self.stackedWidget.addWidget(self.customer_page)           # index 1
+        self.stackedWidget.addWidget(self.meter_page)              # index 2
         self.stackedWidget.addWidget(self.electricity_input_page)  # index 3
-        self.stackedWidget.addWidget(self.billing_page)         # index 4
-        self.stackedWidget.addWidget(self.invoice_page)         # index 5
-        self.stackedWidget.addWidget(self.report_page)          # index 6
+        self.stackedWidget.addWidget(self.billing_page)            # index 4
+        self.stackedWidget.addWidget(self.invoice_page)            # index 5
+        self.stackedWidget.addWidget(self.report_page)             # index 6
+        self.stackedWidget.addWidget(self.paid_customers_page)     # index 7
 
     def _connect_signals(self):
         """Kết nối signal-slot"""
@@ -161,8 +166,26 @@ class MainWindow(QMainWindow):
         self.btnLogout.clicked.connect(self._on_logout)
 
     def _on_menu_changed(self, index: int):
-        """Chuyển trang khi chọn menu"""
+        """Chuyển trang khi chọn menu, tự động refresh dữ liệu bằng cách tải lại widget"""
         if 0 <= index < self.stackedWidget.count():
+            # Tái tạo lại widget để luôn có dữ liệu DB mới nhất
+            page_class = None
+            if index == 0: page_class = DashboardView
+            elif index == 1: page_class = CustomerView
+            elif index == 2: page_class = MeterView
+            elif index == 3: page_class = ElectricityInputView
+            elif index == 4: page_class = BillingView
+            elif index == 5: page_class = InvoiceView
+            elif index == 6: page_class = ReportView
+            elif index == 7: page_class = PaidCustomersView
+            
+            if page_class:
+                old_widget = self.stackedWidget.widget(index)
+                new_widget = page_class()
+                self.stackedWidget.insertWidget(index, new_widget)
+                self.stackedWidget.removeWidget(old_widget)
+                old_widget.deleteLater()
+                
             self.stackedWidget.setCurrentIndex(index)
             page_name = MENU_INDEX.get(index, "")
             print(f"[NAV] Chuyển đến: {page_name}")

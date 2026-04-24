@@ -8,12 +8,12 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QTableWidget, QTableWidgetItem, QPushButton,
     QLineEdit, QHeaderView, QAbstractItemView,
-    QFrame, QComboBox, QMessageBox
+    QFrame, QComboBox, QMessageBox, QDialog, QFormLayout
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 
-from data.mock_data import METERS
+from data.db_repository import get_all_meters, add_meter, get_all_customers
 
 
 class MeterView(QWidget):
@@ -24,8 +24,12 @@ class MeterView(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.meters = copy.deepcopy(METERS)
+        self.meters = []
         self._build_ui()
+        self._refresh_data()
+
+    def _refresh_data(self):
+        self.meters = get_all_meters()
         self._load_table()
 
     def _build_ui(self):
@@ -88,6 +92,13 @@ class MeterView(QWidget):
             }}
             QPushButton:hover {{ background: {hover}; }}
         """
+        # Nút Thêm công tơ
+        self.btn_add = QPushButton("➕ Thêm công tơ")
+        self.btn_add.setStyleSheet(btn_style.format(bg="#10B981", fg="white", hover="#059669"))
+        self.btn_add.clicked.connect(self._on_add)
+        toolbar.addWidget(self.btn_add)
+
+        # Nút làm mới
         self.btn_refresh = QPushButton("🔄  Làm mới")
         self.btn_refresh.setStyleSheet(btn_style.format(bg="#6B7280", fg="white", hover="#4B5563"))
         self.btn_refresh.clicked.connect(self._on_refresh)
@@ -225,3 +236,145 @@ class MeterView(QWidget):
         self.txt_search.clear()
         self.cmb_filter.setCurrentIndex(0)
         self._load_table()
+
+    def _on_add(self):
+        """Thêm công tơ mới"""
+        dialog = AddMeterDialog(self, meters=self.meters)
+        if dialog.exec_() == QDialog.Accepted:
+            data = dialog.get_data()
+            if not data["ma_cong_to"]:
+                QMessageBox.warning(self, "Lỗi", "Vui lòng nhập mã công tơ!")
+                return
+                
+            # Kiểm tra trùng lặp
+            if any(m["ma_cong_to"] == data["ma_cong_to"] for m in self.meters):
+                QMessageBox.warning(self, "Lỗi", "Mã công tơ đã tồn tại!")
+                return
+
+            # Thêm vào DB
+            success = add_meter(data)
+            if success:
+                self._refresh_data()
+                self._update_summary()
+                QMessageBox.information(self, "Thành công", f"Đã thêm công tơ mới: {data['ma_cong_to']}")
+            else:
+                QMessageBox.critical(self, "Lỗi", "Không thể thêm vào CSDL!")
+
+    def _update_summary(self):
+        """Cập nhật các số liệu thẻ thống kê (cần thiết khi thêm mới)"""
+        # Xóa các thẻ cũ rồi vẽ lại (để đơn giản)
+        # Cách tốt hơn là lưu tham chiếu tới các QLabel, nhưng ở đây có thể gọi lại _build_ui hoặc chỉ cập nhật lbl_count
+        self.lbl_count.setText(f"Tổng: {len(self.meters)} công tơ")
+
+
+class AddMeterDialog(QDialog):
+    """Popup Form Thêm Công Tơ"""
+    def __init__(self, parent=None, meters=None):
+        super().__init__(parent)
+        self.setWindowTitle("Thêm Công Tơ Mới")
+        self.setFixedSize(450, 360)
+        self.setStyleSheet("background: #FFFFFF;")
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(16)
+        
+        title = QLabel("Thêm Công Tơ Mới")
+        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #1E293B;")
+        layout.addWidget(title)
+        
+        form_layout = QFormLayout()
+        form_layout.setSpacing(14)
+        
+        input_style = """
+            QLineEdit, QComboBox {
+                border: 1.5px solid #E2E8F0; border-radius: 6px;
+                padding: 8px 12px; font-size: 15px;
+                background: #F8FAFC; min-height: 36px;
+            }
+            QLineEdit:focus, QComboBox:focus { border-color: #3B82F6; background: #FFFFFF; }
+        """
+        label_style = "font-size: 15px; font-weight: 600; color: #475569;"
+        
+        # Mã công tơ
+        self.txt_ma = QLineEdit()
+        self.txt_ma.setStyleSheet(input_style)
+        self.txt_ma.setPlaceholderText("VD: CT009")
+        lbl_ma = QLabel("Mã Công tơ:")
+        lbl_ma.setStyleSheet(label_style)
+        form_layout.addRow(lbl_ma, self.txt_ma)
+        
+        if meters is not None:
+            max_id = 0
+            for m in meters:
+                if m["ma_cong_to"].startswith("CT"):
+                    try:
+                        num = int(m["ma_cong_to"][2:])
+                        max_id = max(max_id, num)
+                    except ValueError:
+                        pass
+            new_id = f"CT{max_id + 1:03d}"
+            self.txt_ma.setText(new_id)
+            self.txt_ma.setReadOnly(True)
+            self.txt_ma.setStyleSheet(input_style + " background: #E2E8F0; color: #64748B;")
+        
+        # Khách hàng từ DB
+        customers = get_all_customers()
+        self.cmb_kh = QComboBox()
+        self.cmb_kh.setStyleSheet(input_style)
+        for c in customers:
+            self.cmb_kh.addItem(f"{c['ma_kh']} - {c['ten']}", userData=c)
+        lbl_kh = QLabel("Khách hàng:")
+        lbl_kh.setStyleSheet(label_style)
+        form_layout.addRow(lbl_kh, self.cmb_kh)
+        
+        # Vị trí
+        self.txt_vi_tri = QLineEdit()
+        self.txt_vi_tri.setStyleSheet(input_style)
+        self.txt_vi_tri.setPlaceholderText("VD: Cột điện E1")
+        lbl_vi_tri = QLabel("Vị trí lắp đặt:")
+        lbl_vi_tri.setStyleSheet(label_style)
+        form_layout.addRow(lbl_vi_tri, self.txt_vi_tri)
+        
+        # Trạng thái
+        self.cmb_trang_thai = QComboBox()
+        self.cmb_trang_thai.setStyleSheet(input_style)
+        self.cmb_trang_thai.addItems(["Hoạt động", "Hỏng", "Ngừng"])
+        lbl_trang_thai = QLabel("Trạng thái:")
+        lbl_trang_thai.setStyleSheet(label_style)
+        form_layout.addRow(lbl_trang_thai, self.cmb_trang_thai)
+        
+        layout.addLayout(form_layout)
+        layout.addStretch()
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        self.btn_cancel = QPushButton("Hủy")
+        self.btn_cancel.setStyleSheet("""
+            QPushButton { background: #F1F5F9; color: #475569; border-radius: 6px; padding: 8px 20px; font-weight: bold; font-size: 15px;}
+            QPushButton:hover { background: #E2E8F0; }
+        """)
+        self.btn_cancel.clicked.connect(self.reject)
+        
+        self.btn_ok = QPushButton("Lưu công tơ")
+        self.btn_ok.setStyleSheet("""
+            QPushButton { background: #3B82F6; color: white; border-radius: 6px; padding: 8px 20px; font-weight: bold; font-size: 15px;}
+            QPushButton:hover { background: #2563EB; }
+        """)
+        self.btn_ok.clicked.connect(self.accept)
+        
+        btn_layout.addWidget(self.btn_cancel)
+        btn_layout.addWidget(self.btn_ok)
+        layout.addLayout(btn_layout)
+
+    def get_data(self):
+        c = self.cmb_kh.currentData()
+        return {
+            "ma_cong_to": self.txt_ma.text().strip(),
+            "ma_kh": c["ma_kh"] if c else "",
+            "ten_kh": c["ten"] if c else "",
+            "vi_tri": self.txt_vi_tri.text().strip(),
+            "trang_thai": self.cmb_trang_thai.currentText()
+        }

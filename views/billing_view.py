@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 
-from data.mock_data import CUSTOMERS, ELECTRICITY_READINGS, tinh_tien_dien, ELECTRICITY_TIERS
+from data.db_repository import get_all_meters, get_latest_reading, tinh_tien_dien_db, get_electricity_tiers
 
 
 class BillingView(QWidget):
@@ -67,14 +67,15 @@ class BillingView(QWidget):
         """
         label_style = "font-size: 16px; font-weight: 600; color: #374151; margin-top: 4px;"
 
-        # Chọn khách hàng
-        lbl_kh = QLabel("Chọn khách hàng:")
+        lbl_kh = QLabel("Chọn công tơ:")
         lbl_kh.setStyleSheet(label_style)
         self.cmb_kh = QComboBox()
         self.cmb_kh.setStyleSheet(input_style)
-        self.cmb_kh.addItem("-- Chọn khách hàng --", userData=None)
-        for c in CUSTOMERS:
-            self.cmb_kh.addItem(f"{c['ma_kh']} - {c['ten']}", userData=c["ma_kh"])
+        self.cmb_kh.addItem("-- Chọn công tơ --", userData=None)
+        meters = get_all_meters()
+        for m in meters:
+            if m["trang_thai"] == "Hoạt động":
+                self.cmb_kh.addItem(f"{m['ma_cong_to']} - {m['ten_kh']} ({m['vi_tri']})", userData=m)
         self.cmb_kh.currentIndexChanged.connect(self._on_customer_selected)
 
         left_layout.addWidget(lbl_kh)
@@ -96,7 +97,8 @@ class BillingView(QWidget):
         lbl_bac.setStyleSheet(label_style)
         left_layout.addWidget(lbl_bac)
 
-        for tier in ELECTRICITY_TIERS:
+        tiers = get_electricity_tiers()
+        for tier in tiers:
             tier_row = QFrame()
             tier_row.setStyleSheet("QFrame { background: #F8FAFC; border-radius: 6px; }")
             tier_h = QHBoxLayout(tier_row)
@@ -201,23 +203,36 @@ class BillingView(QWidget):
         main_layout.addLayout(content)
 
     def _on_customer_selected(self, index: int):
-        """Khi chọn khách hàng, tự điền tiêu thụ nếu có dữ liệu"""
-        ma_kh = self.cmb_kh.currentData()
-        if not ma_kh:
-            self.lbl_kh_name.setText("Chưa chọn khách hàng")
+        """Khi chọn công tơ, tự điền tiêu thụ nếu có dữ liệu"""
+        meter = self.cmb_kh.currentData()
+        if not meter:
+            self.lbl_kh_name.setText("Chưa chọn khách hàng/công tơ")
+            self.txt_tieu_thu.clear()
+            self.result_table.setRowCount(0)
+            self.lbl_total.setText("0 đồng")
+            self.lbl_total.setStyleSheet("font-size: 28px; font-weight: bold; color: #F59E0B;")
             return
 
+        ma_cong_to = meter["ma_cong_to"]
+
         # Tìm tên khách hàng
-        kh_text = self.cmb_kh.currentText().split(" - ", 1)
-        self.lbl_kh_name.setText(f"Khách hàng: {kh_text[-1]}" if len(kh_text) > 1 else "")
+        self.lbl_kh_name.setText(f"Khách hàng: {meter['ten_kh']} (Mã KH: {meter['ma_kh']})")
 
         # Tìm chỉ số tiêu thụ gần nhất
-        record = next(
-            (r for r in ELECTRICITY_READINGS if r["ma_kh"] == ma_kh),
-            None
-        )
+        record = get_latest_reading(ma_cong_to)
         if record:
+            # Chặn signal để không kích hoạt _on_kwh_changed (hàm xóa kết quả)
+            self.txt_tieu_thu.blockSignals(True)
             self.txt_tieu_thu.setText(str(record["tieu_thu"]))
+            self.txt_tieu_thu.blockSignals(False)
+            
+            # Tự động tính tiền ngay
+            self._on_calc()
+        else:
+            self.txt_tieu_thu.clear()
+            self.result_table.setRowCount(0)
+            self.lbl_total.setText("0 đồng")
+            self.lbl_total.setStyleSheet("font-size: 28px; font-weight: bold; color: #F59E0B;")
 
     def _on_kwh_changed(self):
         """Xóa kết quả khi thay đổi input"""
@@ -235,7 +250,7 @@ class BillingView(QWidget):
             self.lbl_total.setStyleSheet("font-size: 16px; font-weight: bold; color: #EF4444;")
             return
 
-        result = tinh_tien_dien(kwh)
+        result = tinh_tien_dien_db(kwh)
 
         # Hiển thị chi tiết bảng
         self.result_table.setRowCount(0)

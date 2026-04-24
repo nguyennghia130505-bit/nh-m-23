@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 
-from data.mock_data import INVOICES
+from data.db_repository import get_all_invoices, update_invoice_status
 
 
 class InvoiceView(QWidget):
@@ -25,8 +25,12 @@ class InvoiceView(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.invoices = copy.deepcopy(INVOICES)
+        self.invoices = []
         self._build_ui()
+        self._refresh_data()
+
+    def _refresh_data(self):
+        self.invoices = get_all_invoices()
         self._load_table()
 
     def _build_ui(self):
@@ -127,7 +131,7 @@ class InvoiceView(QWidget):
 
         # ── Bảng hóa đơn ────────────────────────────────────
         self.table = QTableWidget()
-        columns = ["Mã HĐ", "Mã KH", "Tên Khách hàng", "Tháng", "Tiêu thụ (kWh)", "Tổng tiền", "Trạng thái"]
+        columns = ["Mã HĐ", "Mã CT", "Mã KH", "Tên Khách hàng", "Tháng", "Tiêu thụ", "Tổng tiền", "Trạng thái"]
         self.table.setColumnCount(len(columns))
         self.table.setHorizontalHeaderLabels(columns)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -135,12 +139,14 @@ class InvoiceView(QWidget):
         self.table.setColumnWidth(0, 80)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
         self.table.setColumnWidth(1, 80)
-        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Fixed)
-        self.table.setColumnWidth(3, 80)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
+        self.table.setColumnWidth(2, 80)
         self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)
-        self.table.setColumnWidth(4, 120)
-        self.table.horizontalHeader().setSectionResizeMode(6, QHeaderView.Fixed)
-        self.table.setColumnWidth(6, 150)
+        self.table.setColumnWidth(4, 80)
+        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Fixed)
+        self.table.setColumnWidth(5, 100)
+        self.table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
+        self.table.setColumnWidth(7, 130)
 
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -184,16 +190,16 @@ class InvoiceView(QWidget):
         for row_idx, inv in enumerate(data):
             self.table.insertRow(row_idx)
             row_vals = [
-                inv["ma_hd"], inv["ma_kh"], inv["ten_kh"],
+                inv["ma_hd"], inv.get("ma_cong_to", ""), inv["ma_kh"], inv["ten_kh"],
                 inv["thang"], f"{inv['tieu_thu']} kWh",
                 f"{inv['tong_tien']:,.0f}đ", inv["trang_thai"]
             ]
             for col_idx, text in enumerate(row_vals):
                 item = QTableWidgetItem(text)
                 item.setTextAlignment(Qt.AlignVCenter | Qt.AlignLeft)
-                if col_idx == 5:
-                    item.setForeground(QColor("#1D4ED8"))
                 if col_idx == 6:
+                    item.setForeground(QColor("#1D4ED8"))
+                if col_idx == 7:
                     item.setForeground(QColor(color_map.get(text, "#64748B")))
                 self.table.setItem(row_idx, col_idx, item)
 
@@ -251,12 +257,12 @@ class InvoiceView(QWidget):
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No
         )
         if reply == QMessageBox.Yes:
-            for i in self.invoices:
-                if i["ma_hd"] == inv["ma_hd"]:
-                    i["trang_thai"] = "Đã thanh toán"
-                    break
-            self._load_table()
-            print(f"[INVOICE] Đã thanh toán: {inv['ma_hd']}")
+            success = update_invoice_status(inv["ma_hd"], "Đã thanh toán", datetime.now().strftime('%d/%m/%Y'))
+            if success:
+                self._refresh_data()
+                print(f"[INVOICE] Đã thanh toán: {inv['ma_hd']}")
+            else:
+                QMessageBox.critical(self, "Lỗi", "Không thể cập nhật CSDL!")
 
     def _on_search(self, keyword: str):
         """Tìm kiếm hóa đơn"""
